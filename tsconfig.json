@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "types": ["node"],
+
+    /* Emit */
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": false,
+    "outDir": "./dist",
+
+    /* Modules & Resolution */
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+
+    /* Language & Target */
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    /* Strictness */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+
+    /* JS Interop */
+    "allowJs": false,
+    "checkJs": false,
+
+    /* Interop / Packaging */
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleDetection": "force"
+  },
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["dist", "node_modules", "**/*.spec.ts"]
+}

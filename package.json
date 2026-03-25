@@ -1,0 +1,58 @@
+{
+  "name": "@ekaone/json-cli",
+  "version": "0.0.1",
+  "description": "AI-powered CLI task runner with JSON command plans",
+  "keywords": ["ai", "agent", "cli", "task-runner", "llm"],
+  "author": {
+    "name": "Eka Prasetia",
+    "email": "ekaone3033@gmail.com",
+    "url": "https://prasetia.me"
+  },
+  "homepage": "https://github.com/ekaone/json-cli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ekaone/json-cli"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "json-cli": "./dist/cli.cjs"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsup",
+    "test": "vitest",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@clack/prompts": "^1.1.0",
+    "execa": "^9.6.1",
+    "openai": "^6.32.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

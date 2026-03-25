@@ -1,0 +1,47 @@
+# Dependency
+node_modules/
+
+# Source Code
+src/
+test/
+*.test.ts
+tsconfig.json
+package-lock.json
+*.spec.ts
+*.config.ts
+
+# Config files
+tsconfig.json
+tsup.config.ts
+vitest.config.ts
+
+# Development files
+.git/
+.github/
+.vscode/
+.idea/
+
+# Documentation
+docs/
+examples/
+
+# .env
+.env.*
+
+# Tests
+test/
+*.test.ts
+
+# Configuration
+.gitignore
+.npmrc
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Misc
+*.tgz
+*.log
+coverage/
