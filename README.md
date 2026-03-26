@@ -22,8 +22,20 @@ yarn global add @ekaone/json-cli
 export ANTHROPIC_API_KEY=your_key_here
 ```
 
+
 ```bash
+// Single intent
 json-cli "please run tests"
+```
+
+```bash
+// Multiple intents
+json-cli "please run tests and build"
+
+OR
+
+```bash
+json-cli "heyy ... run typecheck, test and then check git status"
 ```
 
 ### For local development
