@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import * as p from "@clack/prompts";
 import { resolveProvider, type ProviderName } from "./providers/index.js";
 import { generatePlan } from "./planner.js";

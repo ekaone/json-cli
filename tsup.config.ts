@@ -24,7 +24,7 @@ export default defineConfig([
     outExtension: () => ({ js: ".cjs" }),
     dts: false,
     clean: false,
-    sourcemap: true,
+    sourcemap: false,
     shims: true,
     banner: { js: "#!/usr/bin/env node" },
     outDir: "dist",
