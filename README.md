@@ -1,21 +1,19 @@
 # json-cli
 
-> Under active development - not released yet
-
 AI-powered CLI task runner. Describe your goal in plain English — AI generates a validated JSON command plan — runner executes it step by step.
 
 ## Installation
 
 ```bash
-npm install @ekaone/json-cli
+npm install -g @ekaone/json-cli
 ```
 
 ```bash
-pnpm install @ekaone/json-cli
+pnpm install -g @ekaone/json-cli
 ```
 
 ```bash
-yarn install @ekaone/json-cli
+yarn global add @ekaone/json-cli
 ```
 
 ## Usage 
