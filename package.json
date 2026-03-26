@@ -1,6 +1,6 @@
 {
   "name": "@ekaone/json-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "AI-powered CLI task runner with JSON command plans",
   "keywords": ["ai", "agent", "cli", "task-runner", "llm"],
   "author": {

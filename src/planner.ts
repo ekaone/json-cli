@@ -16,6 +16,8 @@ Rules:
 - Use "shell" type only when no other type fits
 - Keep steps minimal — don't add unnecessary steps
 - Each step must have a clear, short description
+- NEVER generate a "cd" step — each step runs in a separate process so "cd" has no effect
+- If subsequent steps need to run inside a cloned directory, set the "cwd" field instead
 
 Respond ONLY with valid JSON matching this exact shape, no markdown, no explanation:
 {
@@ -35,7 +37,10 @@ Respond ONLY with valid JSON matching this exact shape, no markdown, no explanat
 // ---------------------------------------------------------------------------
 // Main planner function
 // ---------------------------------------------------------------------------
-export async function generatePlan(userPrompt: string, provider: AIProvider): Promise<Plan> {
+export async function generatePlan(
+  userPrompt: string,
+  provider: AIProvider,
+): Promise<Plan> {
   const raw = await provider.generate(userPrompt, buildSystemPrompt());
 
   // Strip markdown fences if any provider wraps output
@@ -51,7 +56,9 @@ export async function generatePlan(userPrompt: string, provider: AIProvider): Pr
   // Layer 2: Zod shape validation
   const result = PlanSchema.safeParse(parsed);
   if (!result.success) {
-    const issues = result.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
     throw new Error(`Plan failed schema validation:\n${issues}`);
   }
 
@@ -59,7 +66,9 @@ export async function generatePlan(userPrompt: string, provider: AIProvider): Pr
   for (const step of result.data.steps) {
     const check = validateStep(step);
     if (!check.valid) {
-      throw new Error(`Step ${step.id} failed catalog validation: ${check.reason}`);
+      throw new Error(
+        `Step ${step.id} failed catalog validation: ${check.reason}`,
+      );
     }
   }
 
