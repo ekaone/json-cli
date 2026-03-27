@@ -74,10 +74,11 @@ function parseArgs(): {
 // Format a step for display
 // ---------------------------------------------------------------------------
 function formatStep(step: Step): string {
+  const formatArg = (arg: string) => (arg.includes(" ") ? `"${arg}"` : arg);
   const cmd =
     step.type === "shell"
-      ? `${step.command} ${step.args.join(" ")}`
-      : `${step.type} ${step.command} ${step.args.join(" ")}`.trim();
+      ? `${step.command} ${step.args.map(formatArg).join(" ")}`
+      : `${step.type} ${step.command} ${step.args.map(formatArg).join(" ")}`.trim();
   return `${cmd.padEnd(35)} → ${step.description}`;
 }
 

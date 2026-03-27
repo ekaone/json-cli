@@ -36,7 +36,7 @@ export const StepSchema = z.object({
   command: z.string(),
   args: z.array(z.string()).default([]),
   description: z.string(),
-  cwd: z.string().optional(), // optional working directory override
+  cwd: z.string().nullable().optional(), // optional working directory override
 });
 
 export const PlanSchema = z.object({

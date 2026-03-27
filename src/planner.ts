@@ -18,6 +18,7 @@ Rules:
 - Each step must have a clear, short description
 - NEVER generate a "cd" step — each step runs in a separate process so "cd" has no effect
 - If subsequent steps need to run inside a cloned directory, set the "cwd" field instead
+- For commands that take a message or value argument (like git commit -m), always keep the full message as a single array element, e.g. args: ["-m", "Update changes"] never args: ["-m", "Update", "changes"]
 
 Respond ONLY with valid JSON matching this exact shape, no markdown, no explanation:
 {
@@ -25,10 +26,19 @@ Respond ONLY with valid JSON matching this exact shape, no markdown, no explanat
   "steps": [
     {
       "id": 1,
+      "type": "git",
+      "command": "commit",
+      "args": ["-m", "Update changes"],
+      "description": "Commit staged changes",
+      "cwd": null
+    },
+    {
+      "id": 2,
       "type": "pnpm",
       "command": "run",
-      "args": ["dev"],
-      "description": "Start dev server"
+      "args": ["dev", "--port", "3000"],
+      "description": "Start dev server",
+      "cwd": "my-repo"
     }
   ]
 }`;
