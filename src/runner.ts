@@ -17,19 +17,29 @@ function resolveCommand(step: Step): { bin: string; args: string[] } {
 // ---------------------------------------------------------------------------
 // Run a single step, streaming stdout/stderr live
 // ---------------------------------------------------------------------------
-export async function runStep(step: Step): Promise<{ success: boolean; error?: string }> {
+export async function runStep(
+  step: Step,
+): Promise<{ success: boolean; error?: string }> {
   const { bin, args } = resolveCommand(step);
 
   try {
     await execa(bin, args, {
-      cwd:    step.cwd ?? process.cwd(),
+      cwd: step.cwd ?? process.cwd(),
       stdout: "inherit", // stream directly to terminal
       stderr: "inherit",
     });
     return { success: true };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
+  } catch (err: any) {
+    const parts = [
+      `Command: ${bin} ${args.join(" ")}`,
+      err?.exitCode ? `Exit code: ${err.exitCode}` : null,
+      err?.stderr ? `Reason: ${err.stderr.trim()}` : null,
+      !err?.stderr ? (err?.message ?? String(err)) : null,
+    ]
+      .filter(Boolean)
+      .join("\n   ");
+
+    return { success: false, error: parts };
   }
 }
 
@@ -38,7 +48,7 @@ export async function runStep(step: Step): Promise<{ success: boolean; error?: s
 // ---------------------------------------------------------------------------
 export async function runPlan(
   plan: Plan,
-  onStep: (step: Step, index: number, total: number) => void
+  onStep: (step: Step, index: number, total: number) => void,
 ): Promise<{ success: boolean; failedStep?: Step; error?: string }> {
   const total = plan.steps.length;
 

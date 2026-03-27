@@ -4,11 +4,24 @@ import { z } from "zod";
 // Allowed commands per type — the whitelist that prevents hallucination
 // ---------------------------------------------------------------------------
 export const CATALOG = {
-  npm:   ["install", "run", "build", "test", "publish", "ci"],
-  pnpm:  ["install", "run", "build", "test", "publish", "add", "remove"],
-  yarn:  ["install", "run", "build", "test", "publish", "add", "remove"],
-  bun:   ["install", "run", "build", "test", "publish", "add", "remove"],
-  git:   ["init", "add", "commit", "push", "pull", "clone", "status", "log"],
+  npm: ["install", "run", "build", "test", "publish", "ci"],
+  pnpm: ["install", "run", "build", "test", "publish", "add", "remove"],
+  yarn: ["install", "run", "build", "test", "publish", "add", "remove"],
+  bun: ["install", "run", "build", "test", "publish", "add", "remove"],
+  git: [
+    "init",
+    "add",
+    "commit",
+    "push",
+    "pull",
+    "clone",
+    "status",
+    "log",
+    "branch",
+    "checkout",
+    "merge",
+    "stash",
+  ],
   shell: ["any"], // escape hatch — always requires extra confirmation
 } as const;
 
@@ -18,16 +31,16 @@ export type CommandType = keyof typeof CATALOG;
 // Zod schemas — Layer 2 defense against hallucinated output
 // ---------------------------------------------------------------------------
 export const StepSchema = z.object({
-  id:          z.number(),
-  type:        z.enum(["npm", "pnpm", "yarn", "bun", "git", "shell"]),
-  command:     z.string(),
-  args:        z.array(z.string()).default([]),
+  id: z.number(),
+  type: z.enum(["npm", "pnpm", "yarn", "bun", "git", "shell"]),
+  command: z.string(),
+  args: z.array(z.string()).default([]),
   description: z.string(),
-  cwd:         z.string().optional(), // optional working directory override
+  cwd: z.string().optional(), // optional working directory override
 });
 
 export const PlanSchema = z.object({
-  goal:  z.string(),
+  goal: z.string(),
   steps: z.array(StepSchema).min(1).max(10),
 });
 
@@ -60,7 +73,10 @@ export function validateStep(step: Step): { valid: boolean; reason?: string } {
 // ---------------------------------------------------------------------------
 export function buildCatalogPrompt(): string {
   const lines = Object.entries(CATALOG).map(([type, commands]) => {
-    const list = commands[0] === "any" ? "any shell command (use sparingly)" : commands.join(", ");
+    const list =
+      commands[0] === "any"
+        ? "any shell command (use sparingly)"
+        : commands.join(", ");
     return `  - ${type}: [${list}]`;
   });
 
