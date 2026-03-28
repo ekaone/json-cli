@@ -99,6 +99,40 @@ json-cli "run tests, check git diff, then git add and commit with message 'fix: 
 json-cli "install deps, run typecheck, run tests, build, git add, commit with message 'ci: local pipeline passed', push"
 ```
 
+### Options
+
+```bash
+json-cli
+# or
+json-cli --help
+```
+```
+┌  json-cli — AI-powered CLI task runner
+│
+│  Usage
+│    json-cli "<your goal>" [options]
+│
+│  Options
+│    --provider <name>   AI provider: claude | openai | ollama  (default: claude)
+│    --yes               Skip confirmation prompt
+│    --dry-run           Show plan without executing
+│    --debug             Show system prompt and raw AI response
+│    --help              Show this help message
+│
+│  Examples
+│    json-cli "please run tests"
+│    json-cli "run tests and build"
+│    json-cli "run tests and build" --yes
+│    json-cli "git add, commit with message 'fix: bug', push"
+│    json-cli "clone https://github.com/user/repo, install deps, run dev"
+│    json-cli "run tests and publish" --provider openai
+│    json-cli "run tests" --dry-run
+│    json-cli "run tests" --debug
+│    json-cli "run tests" --debug --dry-run
+│
+└  Docs: https://github.com/ekaone/json-cli
+```
+
 ---
 
 ## How it works

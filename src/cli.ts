@@ -15,6 +15,7 @@ function showHelp(): void {
   --provider <name>   AI provider: claude | openai | ollama  (default: claude)
   --yes               Skip confirmation prompt
   --dry-run           Show plan without executing
+  --debug             Show system prompt and raw AI response
   --help              Show this help message`,
   );
   p.log.message(
@@ -25,7 +26,9 @@ function showHelp(): void {
   json-cli "git add, commit with message 'fix: bug', push"
   json-cli "clone https://github.com/user/repo, install deps, run dev"
   json-cli "run tests and publish" --provider openai
-  json-cli "run tests" --dry-run`,
+  json-cli "run tests" --dry-run
+  json-cli "run tests" --debug
+  json-cli "run tests" --debug --dry-run`,
   );
   p.outro("Docs: https://github.com/ekaone/json-cli");
 }
@@ -39,6 +42,7 @@ function parseArgs(): {
   provider: ProviderName;
   yes: boolean;
   dryRun: boolean;
+  debug: boolean;
 } {
   const args = process.argv.slice(2);
 
@@ -54,6 +58,7 @@ function parseArgs(): {
 
   const yes = args.includes("--yes");
   const dryRun = args.includes("--dry-run");
+  const debug = args.includes("--debug");
 
   const prompt = args
     .filter(
@@ -67,7 +72,7 @@ function parseArgs(): {
     process.exit(0);
   }
 
-  return { prompt, provider, yes, dryRun };
+  return { prompt, provider, yes, dryRun, debug };
 }
 
 // ---------------------------------------------------------------------------
@@ -86,10 +91,10 @@ function formatStep(step: Step): string {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
-  const { prompt, provider: providerName, yes, dryRun } = parseArgs();
+  const { prompt, provider: providerName, yes, dryRun, debug } = parseArgs();
 
   p.intro(
-    `json-cli — powered by ${providerName}${dryRun ? "  (dry run)" : ""}`,
+    `json-cli — powered by ${providerName}${dryRun ? "  (dry run)" : ""}${debug ? "  (debug)" : ""}`,
   );
 
   // Step 1: Generate plan
@@ -99,7 +104,7 @@ async function main() {
   let plan;
   try {
     const provider = resolveProvider(providerName);
-    plan = await generatePlan(prompt, provider);
+    plan = await generatePlan(prompt, provider, debug);
     spinner.stop("Plan ready");
   } catch (err) {
     spinner.stop("Failed to generate plan");
@@ -128,6 +133,7 @@ async function main() {
   if (dryRun) {
     p.outro("Dry run complete — no commands were executed.");
     setTimeout(() => process.exit(0), 50);
+    return;
   }
 
   // Step 5: Confirm — skip if --yes
@@ -136,6 +142,7 @@ async function main() {
     if (p.isCancel(confirmed) || !confirmed) {
       p.cancel("Aborted.");
       setTimeout(() => process.exit(0), 50);
+      return;
     }
   } else {
     p.log.info("Skipping confirmation (--yes)");
@@ -155,6 +162,7 @@ async function main() {
       `❌ Failed at step ${result.failedStep?.id}: ${result.failedStep?.description}\n${result.error ?? ""}`,
     );
     setTimeout(() => process.exit(1), 50);
+    return;
   }
 }
 

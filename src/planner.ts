@@ -50,8 +50,36 @@ Respond ONLY with valid JSON matching this exact shape, no markdown, no explanat
 export async function generatePlan(
   userPrompt: string,
   provider: AIProvider,
+  debug: boolean = false,
 ): Promise<Plan> {
-  const raw = await provider.generate(userPrompt, buildSystemPrompt());
+  const systemPrompt = buildSystemPrompt();
+
+  if (debug) {
+    console.log("┌");
+    console.log("│");
+    console.log("●  System prompt:");
+    console.log(
+      "│  " + systemPrompt.split("\n").slice(0, 8).join("\n│  ") + "...",
+    );
+    console.log("│");
+  }
+
+  const raw = await provider.generate(userPrompt, systemPrompt);
+
+  if (debug) {
+    console.log("●  Raw AI response:");
+    try {
+      const parsed = JSON.parse(raw);
+      console.log(
+        "│  " + JSON.stringify(parsed, null, 2).split("\n").join("\n│  "),
+      );
+    } catch {
+      console.log("│  " + raw);
+    }
+    console.log("│");
+    console.log("◇  Plan ready");
+    console.log("");
+  }
 
   // Strip markdown fences if any provider wraps output
   const cleaned = raw.replace(/```json|```/g, "").trim();
