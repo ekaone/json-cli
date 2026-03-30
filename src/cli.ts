@@ -1,7 +1,9 @@
 import * as p from "@clack/prompts";
+import { createRequire } from "module";
 import { resolveProvider, type ProviderName } from "./providers/index.js";
 import { generatePlan } from "./planner.js";
 import { runPlan } from "./runner.js";
+import { calculateCost, formatCost } from "./providers/pricing.js";
 import type { Step } from "./catalog.js";
 
 // ---------------------------------------------------------------------------
@@ -16,7 +18,8 @@ function showHelp(): void {
   --yes               Skip confirmation prompt
   --dry-run           Show plan without executing
   --debug             Show system prompt and raw AI response
-  --help              Show this help message`,
+  --help              Show this help message
+  --version, -v       Show version`,
   );
   p.log.message(
     `Examples
@@ -45,6 +48,14 @@ function parseArgs(): {
   debug: boolean;
 } {
   const args = process.argv.slice(2);
+  const require = createRequire(import.meta.url);
+  const { version, name } = require("../package.json");
+
+  // show version
+  if (args.includes("--version") || args.includes("-v")) {
+    console.log(`${name}@${version}`);
+    process.exit(0);
+  }
 
   // show help if no args or --help flag
   if (args.length === 0 || args.includes("--help")) {
@@ -101,11 +112,11 @@ async function main() {
   const spinner = p.spinner();
   spinner.start("Thinking...");
 
-  let plan;
+  let planResult;
   try {
     const provider = resolveProvider(providerName);
-    plan = await generatePlan(prompt, provider, debug);
-    spinner.stop("Plan ready");
+    planResult = await generatePlan(prompt, provider, debug);
+    spinner.stop(debug ? "" : "Plan ready");
   } catch (err) {
     spinner.stop("Failed to generate plan");
     p.log.error(err instanceof Error ? err.message : String(err));
@@ -113,8 +124,8 @@ async function main() {
   }
 
   // Step 2: Show plan
-  p.log.info(`Goal: ${plan.goal}\n`);
-  plan.steps.forEach((step, i) => {
+  p.log.info(`Goal: ${planResult.plan.goal}\n`);
+  planResult.plan.steps.forEach((step, i) => {
     const isShell = step.type === "shell";
     p.log.message(
       `  ${i + 1}. ${formatStep(step)}${isShell ? "  ⚠ shell" : ""}`,
@@ -122,7 +133,7 @@ async function main() {
   });
 
   // Step 3: Extra warning if any shell steps
-  const hasShell = plan.steps.some((s) => s.type === "shell");
+  const hasShell = planResult.plan.steps.some((s) => s.type === "shell");
   if (hasShell) {
     p.log.warn(
       "Plan contains shell commands — review carefully before proceeding.",
@@ -131,9 +142,17 @@ async function main() {
 
   // Step 4: Dry run — show plan and exit
   if (dryRun) {
-    p.outro("Dry run complete — no commands were executed.");
-    setTimeout(() => process.exit(0), 50);
-    return;
+    const { input, output } = planResult.usage;
+    const cost = calculateCost(providerName, input, output);
+    const costStr = formatCost(cost);
+    const usageStr =
+      input > 0 || output > 0
+        ? `  |  tokens: ${input} in / ${output} out${costStr ? `  |  ${costStr}` : ""}`
+        : "";
+
+    p.outro(`Dry run complete — no commands were executed.${usageStr}`);
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(0);
   }
 
   // Step 5: Confirm — skip if --yes
@@ -141,8 +160,8 @@ async function main() {
     const confirmed = await p.confirm({ message: "Proceed?" });
     if (p.isCancel(confirmed) || !confirmed) {
       p.cancel("Aborted.");
-      setTimeout(() => process.exit(0), 50);
-      return;
+      await new Promise((r) => setTimeout(r, 100));
+      process.exit(0);
     }
   } else {
     p.log.info("Skipping confirmation (--yes)");
@@ -150,19 +169,27 @@ async function main() {
 
   // Step 6: Execute
   console.log("");
-  const result = await runPlan(plan, (step, i, total) => {
+  const result = await runPlan(planResult.plan, (step, i, total) => {
     p.log.step(`Step ${i + 1}/${total}: ${formatStep(step)}`);
   });
 
   // Step 7: Result
   if (result.success) {
-    p.outro("✅ All steps completed successfully.");
+    const { input, output } = planResult.usage;
+    const cost = calculateCost(providerName, input, output);
+    const costStr = formatCost(cost);
+    const usageStr =
+      input > 0 || output > 0
+        ? `  |  tokens: ${input} in / ${output} out${costStr ? `  |  ${costStr}` : ""}`
+        : "";
+
+    p.outro(`✅ All steps completed successfully.${usageStr}`);
   } else {
     p.log.error(
       `❌ Failed at step ${result.failedStep?.id}: ${result.failedStep?.description}\n${result.error ?? ""}`,
     );
-    setTimeout(() => process.exit(1), 50);
-    return;
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(1);
   }
 }
 

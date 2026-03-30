@@ -1,5 +1,5 @@
 import { buildCatalogPrompt, PlanSchema, validateStep } from "./catalog.js";
-import type { AIProvider } from "./providers/types.js";
+import type { AIProvider, TokenUsage } from "./providers/types.js";
 import type { Plan } from "./catalog.js";
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ export async function generatePlan(
   userPrompt: string,
   provider: AIProvider,
   debug: boolean = false,
-): Promise<Plan> {
+): Promise<{ plan: Plan; usage: TokenUsage }> {
   const systemPrompt = buildSystemPrompt();
 
   if (debug) {
@@ -64,17 +64,17 @@ export async function generatePlan(
     console.log("│");
   }
 
-  const raw = await provider.generate(userPrompt, systemPrompt);
+  const response = await provider.generate(userPrompt, systemPrompt);
 
   if (debug) {
     console.log("●  Raw AI response:");
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(response.content);
       console.log(
         "│  " + JSON.stringify(parsed, null, 2).split("\n").join("\n│  "),
       );
     } catch {
-      console.log("│  " + raw);
+      console.log("│  " + response.content);
     }
     console.log("│");
     console.log("◇  Plan ready");
@@ -82,7 +82,7 @@ export async function generatePlan(
   }
 
   // Strip markdown fences if any provider wraps output
-  const cleaned = raw.replace(/```json|```/g, "").trim();
+  const cleaned = response.content.replace(/```json|```/g, "").trim();
 
   let parsed: unknown;
   try {
@@ -110,5 +110,8 @@ export async function generatePlan(
     }
   }
 
-  return result.data;
+  return {
+    plan: result.data,
+    usage: response.usage,
+  };
 }

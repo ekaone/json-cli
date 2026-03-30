@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { AIProvider } from "./types.js";
+import type { AIProvider, TokenUsage } from "./types.js";
 
 export function createClaudeProvider(apiKey?: string): AIProvider {
   const client = new Anthropic({
@@ -19,7 +19,16 @@ export function createClaudeProvider(apiKey?: string): AIProvider {
       const block = message.content[0];
       if (block.type !== "text")
         throw new Error("Unexpected response type from Claude");
-      return block.text;
+
+      const usage: TokenUsage = {
+        input: message.usage?.input_tokens ?? 0,
+        output: message.usage?.output_tokens ?? 0,
+      };
+
+      return {
+        content: block.text,
+        usage,
+      };
     },
   };
 }
