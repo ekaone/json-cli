@@ -118,6 +118,7 @@ json-cli --help
 │    --dry-run           Show plan without executing
 │    --debug             Show system prompt and raw AI response
 │    --help              Show this help message
+│    --version, -v       Show version
 │
 │  Examples
 │    json-cli "please run tests"
@@ -205,6 +206,16 @@ pnpm dev "please run tests"
 pnpm test
 pnpm build
 ```
+
+## Pricing
+
+> **Note:** [Pricing](./src/providers/pricing.ts) is based on the lastest rates from each provider. Write an [issue](https://github.com/ekaone/json-cli/issues) if you find any outdated pricing.
+
+| Provider | Input Cost (per 1M tokens) | Output Cost (per 1M tokens) |
+|----------|----------------------------|-----------------------------|
+| Claude   | $3.00                      | $15.00                      |
+| OpenAI   | $2.50                      | $10.00                      |
+| Ollama   | $0.00                      | $0.00                       |
 
 ---
 
