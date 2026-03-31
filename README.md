@@ -1,6 +1,6 @@
 # json-cli
 
-AI-powered CLI task runner. Describe your goal in plain English — AI generates a validated JSON command plan — runner executes it step by step.
+AI-powered CLI task runner. Write in plain English, AI generates a validated JSON command plan and finally runner executes it step by step.
 
 ## Installation
 
@@ -107,31 +107,31 @@ json-cli
 json-cli --help
 ```
 ```
-┌  json-cli — AI-powered CLI task runner
-│
-│  Usage
-│    json-cli "<your goal>" [options]
-│
-│  Options
-│    --provider <name>   AI provider: claude | openai | ollama  (default: claude)
-│    --yes               Skip confirmation prompt
-│    --dry-run           Show plan without executing
-│    --debug             Show system prompt and raw AI response
-│    --help              Show this help message
-│    --version, -v       Show version
-│
-│  Examples
-│    json-cli "please run tests"
-│    json-cli "run tests and build"
-│    json-cli "run tests and build" --yes
-│    json-cli "git add, commit with message 'fix: bug', push"
-│    json-cli "clone https://github.com/user/repo, install deps, run dev"
-│    json-cli "run tests and publish" --provider openai
-│    json-cli "run tests" --dry-run
-│    json-cli "run tests" --debug
-│    json-cli "run tests" --debug --dry-run
-│
-└  Docs: https://github.com/ekaone/json-cli
+  json-cli — AI-powered CLI task runner
+
+  Usage
+    json-cli "<your goal>" [options]
+
+  Options
+    --provider <name>   AI provider: claude | openai | ollama  (default: claude)
+    --yes               Skip confirmation prompt
+    --dry-run           Show plan without executing
+    --debug             Show system prompt and raw AI response
+    --help              Show this help message
+    --version, -v       Show version
+
+  Examples
+    json-cli "please run tests"
+    json-cli "run tests and build"
+    json-cli "run tests and build" --yes
+    json-cli "git add, commit with message 'fix: bug', push"
+    json-cli "clone https://github.com/user/repo, install deps, run dev"
+    json-cli "run tests and publish" --provider openai
+    json-cli "run tests" --dry-run
+    json-cli "run tests" --debug
+    json-cli "run tests" --debug --dry-run
+
+  Docs: https://github.com/ekaone/json-cli
 ```
 
 ---
@@ -172,7 +172,7 @@ Runner              ← executes step by step, streams output live
 | `fs`    | mkdir, touch, cp, mv, ls  `(coming soon)` |
 | `shell` | any *(escape hatch — always requires extra confirmation)* |
 
-> **Note:** Flags and arguments are unrestricted — `--port 5000`, `-m "message"`, `--force` etc. are all passed freely. Only the command itself is whitelisted.
+> **Note:** Flags and arguments are unrestricted, `--port 5000`, `-m "message"`, `--force` etc. are all passed freely. Only the command itself is whitelisted.
 
 ---
 
