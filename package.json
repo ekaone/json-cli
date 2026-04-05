@@ -1,6 +1,6 @@
 {
   "name": "@ekaone/json-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "AI-powered CLI task runner with JSON command plans",
   "keywords": ["ai", "agent", "cli", "task-runner", "llm"],
   "author": {
@@ -31,7 +31,7 @@
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
-    "build": "pnpm typecheck && pnpm clean && pnpm tsup",
+    "build": "pnpm typecheck && pnpm test && pnpm clean && pnpm tsup",
     "clean": "rimraf dist",
     "prepublishOnly": "pnpm run clean && pnpm run test && pnpm run build",
     "typecheck": "tsc --noEmit",
