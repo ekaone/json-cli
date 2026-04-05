@@ -6,11 +6,8 @@ import type { Plan, Step } from "./catalog.js";
 // ---------------------------------------------------------------------------
 function resolveCommand(step: Step): { bin: string; args: string[] } {
   if (step.type === "shell") {
-    // shell: command is the binary, args are the args
     return { bin: step.command, args: step.args };
   }
-
-  // For npm/pnpm/yarn/bun/git: binary is the type, command + args follow
   return { bin: step.type, args: [step.command, ...step.args] };
 }
 
@@ -24,8 +21,8 @@ export async function runStep(
 
   try {
     await execa(bin, args, {
-      cwd: step.cwd ?? process.cwd(),
-      stdout: "inherit", // stream directly to terminal
+      cwd:    step.cwd ?? process.cwd(),
+      stdout: "inherit",
       stderr: "inherit",
     });
     return { success: true };
@@ -33,8 +30,8 @@ export async function runStep(
     const parts = [
       `Command: ${bin} ${args.join(" ")}`,
       err?.exitCode ? `Exit code: ${err.exitCode}` : null,
-      err?.stderr ? `Reason: ${err.stderr.trim()}` : null,
-      !err?.stderr ? (err?.message ?? String(err)) : null,
+      err?.stderr   ? `Reason: ${err.stderr.trim()}` : null,
+      !err?.stderr  ? (err?.message ?? String(err))  : null,
     ]
       .filter(Boolean)
       .join("\n   ");
@@ -45,21 +42,23 @@ export async function runStep(
 
 // ---------------------------------------------------------------------------
 // Run the full plan, stopping on first failure
+// startFrom: step index (0-based) to resume from — skips earlier steps
 // ---------------------------------------------------------------------------
 export async function runPlan(
   plan: Plan,
   onStep: (step: Step, index: number, total: number) => void,
-): Promise<{ success: boolean; failedStep?: Step; error?: string }> {
+  startFrom = 0, // ← new param for resume
+): Promise<{ success: boolean; failedStep?: Step; failedIndex?: number; error?: string }> {
   const total = plan.steps.length;
 
-  for (let i = 0; i < total; i++) {
+  for (let i = startFrom; i < total; i++) {
     const step = plan.steps[i];
     onStep(step, i, total);
 
     const result = await runStep(step);
 
     if (!result.success) {
-      return { success: false, failedStep: step, error: result.error };
+      return { success: false, failedStep: step, failedIndex: i, error: result.error };
     }
   }
 
