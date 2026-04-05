@@ -112,11 +112,17 @@ json-cli --help
   Usage
     json-cli "<your goal>" [options]
 
+  Alias
+    jc "<your goal>" [options]
+
   Options
     --provider <name>   AI provider: claude | openai | ollama  (default: claude)
     --yes               Skip confirmation prompt
     --dry-run           Show plan without executing
     --debug             Show system prompt and raw AI response
+    --resume            Resume from last failed step
+    --history           Browse and re-run past commands
+    --history --clear   Clear command history
     --help              Show this help message
     --version, -v       Show version
 
@@ -130,6 +136,8 @@ json-cli --help
     json-cli "run tests" --dry-run
     json-cli "run tests" --debug
     json-cli "run tests" --debug --dry-run
+    json-cli --resume
+    json-cli --history
 
   Docs: https://github.com/ekaone/json-cli
 ```
