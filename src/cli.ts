@@ -4,6 +4,13 @@ import { resolveProvider, type ProviderName } from "./providers/index.js";
 import { generatePlan } from "./planner.js";
 import { runPlan } from "./runner.js";
 import { calculateCost, formatCost } from "./providers/pricing.js";
+import { saveResume, loadResume, clearResume, hasResume } from "./resume.js";
+import {
+  appendHistory,
+  getRecentHistory,
+  clearHistory,
+  hasHistory,
+} from "./history.js";
 import type { Step } from "./catalog.js";
 
 // ---------------------------------------------------------------------------
@@ -12,12 +19,16 @@ import type { Step } from "./catalog.js";
 function showHelp(): void {
   p.intro("json-cli — AI-powered CLI task runner");
   p.log.message(`Usage\n  json-cli "<your goal>" [options]\n`);
+  p.log.message(`Alias\n  jc "<your goal>" [options]\n`);
   p.log.message(
     `Options
   --provider <name>   AI provider: claude | openai | ollama  (default: claude)
   --yes               Skip confirmation prompt
   --dry-run           Show plan without executing
   --debug             Show system prompt and raw AI response
+  --resume            Resume from last failed step
+  --history           Browse and re-run past commands
+  --history --clear   Clear command history
   --help              Show this help message
   --version, -v       Show version`,
   );
@@ -31,14 +42,15 @@ function showHelp(): void {
   json-cli "run tests and publish" --provider openai
   json-cli "run tests" --dry-run
   json-cli "run tests" --debug
-  json-cli "run tests" --debug --dry-run`,
+  json-cli "run tests" --debug --dry-run
+  json-cli --resume
+  json-cli --history`,
   );
   p.outro("Docs: https://github.com/ekaone/json-cli");
 }
 
 // ---------------------------------------------------------------------------
 // Parse CLI args
-// e.g. json-cli "run tests" --provider claude --yes --dry-run
 // ---------------------------------------------------------------------------
 function parseArgs(): {
   prompt: string;
@@ -46,18 +58,21 @@ function parseArgs(): {
   yes: boolean;
   dryRun: boolean;
   debug: boolean;
+  resume: boolean;
+  history: boolean;
+  historyClear: boolean;
 } {
   const args = process.argv.slice(2);
   const require = createRequire(import.meta.url);
   const { version, name } = require("../package.json");
 
-  // show version
+  // version
   if (args.includes("--version") || args.includes("-v")) {
     console.log(`${name}@${version}`);
     process.exit(0);
   }
 
-  // show help if no args or --help flag
+  // help
   if (args.length === 0 || args.includes("--help")) {
     showHelp();
     process.exit(0);
@@ -70,20 +85,35 @@ function parseArgs(): {
   const yes = args.includes("--yes");
   const dryRun = args.includes("--dry-run");
   const debug = args.includes("--debug");
+  const resume = args.includes("--resume");
+  const history = args.includes("--history");
+  const historyClear = history && args.includes("--clear");
 
   const prompt = args
     .filter(
       (a, i) =>
-        !a.startsWith("--") && (providerFlag === -1 || i !== providerFlag + 1),
+        !a.startsWith("--") &&
+        !a.startsWith("-v") &&
+        (providerFlag === -1 || i !== providerFlag + 1),
     )
     .join(" ");
 
-  if (!prompt) {
+  // resume and history don't need a prompt
+  if (!prompt && !resume && !history) {
     showHelp();
     process.exit(0);
   }
 
-  return { prompt, provider, yes, dryRun, debug };
+  return {
+    prompt,
+    provider,
+    yes,
+    dryRun,
+    debug,
+    resume,
+    history,
+    historyClear,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -99,11 +129,254 @@ function formatStep(step: Step): string {
 }
 
 // ---------------------------------------------------------------------------
+// Format usage string
+// ---------------------------------------------------------------------------
+function formatUsage(
+  input: number,
+  output: number,
+  provider: ProviderName,
+): string {
+  if (input === 0 && output === 0) return "";
+  const cost = calculateCost(provider, input, output);
+  const costStr = formatCost(cost);
+  return `  |  tokens: ${input} in / ${output} out${costStr ? `  |  ${costStr}` : ""}`;
+}
+
+// ---------------------------------------------------------------------------
+// Handle --history
+// ---------------------------------------------------------------------------
+async function handleHistory(): Promise<string | null> {
+  p.intro("json-cli — history");
+
+  if (!hasHistory()) {
+    p.log.warn("No history found.");
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(0);
+  }
+
+  const entries = getRecentHistory();
+  const options = entries.map((e) => ({
+    value: e.prompt,
+    label: `${e.prompt.slice(0, 60)}${e.prompt.length > 60 ? "..." : ""}`,
+    hint: `${e.steps} steps · ${e.provider} · ${new Date(e.timestamp).toLocaleString()}`,
+  }));
+
+  options.unshift({
+    value: "__exit__",
+    label: "Exit",
+    hint: "Close without running",
+  });
+
+  options.push({
+    value: "__clear__",
+    label: "Clear history",
+    hint: "Remove all entries",
+  });
+
+  const selected = await p.select({
+    message: "Pick a command to re-run:",
+    options,
+  });
+
+  if (selected === "__exit__") {
+    p.cancel("Cancelled.");
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(0);
+  }
+
+  if (p.isCancel(selected)) {
+    p.cancel("Cancelled.");
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(0);
+  }
+
+  if (selected === "__clear__") {
+    clearHistory();
+    p.outro("History cleared.");
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(0);
+  }
+
+  return selected as string;
+}
+
+// ---------------------------------------------------------------------------
+// Handle --resume
+// ---------------------------------------------------------------------------
+async function handleResume(): Promise<{
+  prompt: string;
+  provider: ProviderName;
+  startFrom: number;
+} | null> {
+  if (!hasResume()) {
+    p.log.warn("No resume state found — nothing to resume.");
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(0);
+  }
+
+  const data = loadResume()!;
+  const resumeFrom = data.failedAt;
+
+  p.intro(`json-cli — resuming from step ${resumeFrom + 1}`);
+  p.log.info(`Original goal: ${data.plan.goal}`);
+  p.log.message(`Skipping steps 1-${resumeFrom}, resuming from:`);
+
+  data.plan.steps.slice(resumeFrom).forEach((step, i) => {
+    p.log.message(`  ${resumeFrom + i + 1}. ${formatStep(step)}`);
+  });
+
+  return {
+    prompt: data.prompt,
+    provider: data.provider,
+    startFrom: resumeFrom,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Execute plan
+// ---------------------------------------------------------------------------
+async function executePlan(
+  planResult: Awaited<ReturnType<typeof generatePlan>>,
+  providerName: ProviderName,
+  prompt: string,
+  yes: boolean,
+  startFrom = 0,
+): Promise<void> {
+  // Confirm
+  if (!yes) {
+    const confirmed = await p.confirm({
+      message: startFrom > 0 ? "Resume execution?" : "Proceed?",
+    });
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.cancel("Aborted.");
+      await new Promise((r) => setTimeout(r, 100));
+      process.exit(0);
+    }
+  } else {
+    p.log.info("Skipping confirmation (--yes)");
+  }
+
+  // Execute
+  console.log("");
+  const result = await runPlan(
+    planResult.plan,
+    (step, i, total) => {
+      p.log.step(`Step ${i + 1}/${total}: ${formatStep(step)}`);
+    },
+    startFrom,
+  );
+
+  const usageStr = formatUsage(
+    planResult.usage.input,
+    planResult.usage.output,
+    providerName,
+  );
+
+  if (result.success) {
+    // clear resume on success
+    clearResume();
+
+    // append to history
+    appendHistory({
+      prompt,
+      provider: providerName,
+      steps: planResult.plan.steps.length,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+
+    p.outro(`✅ All steps completed successfully.${usageStr}`);
+  } else {
+    // save resume state on failure
+    saveResume({
+      plan: planResult.plan,
+      failedAt: result.failedIndex ?? 0,
+      provider: providerName,
+      prompt,
+      timestamp: new Date().toISOString(),
+    });
+
+    p.log.error(
+      `❌ Failed at step ${result.failedStep?.id}: ${result.failedStep?.description}\n${result.error ?? ""}`,
+    );
+    p.log.warn('Run "json-cli --resume" to continue from this step.');
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
-  const { prompt, provider: providerName, yes, dryRun, debug } = parseArgs();
+  const {
+    prompt,
+    provider: providerName,
+    yes,
+    dryRun,
+    debug,
+    resume,
+    history,
+    historyClear,
+  } = parseArgs();
 
+  // ---------------------------------------------------------------------------
+  // Handle --history --clear
+  // ---------------------------------------------------------------------------
+  if (historyClear) {
+    clearHistory();
+    p.outro("History cleared.");
+    await new Promise((r) => setTimeout(r, 100));
+    process.exit(0);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Handle --history
+  // ---------------------------------------------------------------------------
+  if (history) {
+    const selected = await handleHistory();
+    if (!selected) process.exit(0);
+
+    // re-run selected prompt
+    p.intro(`json-cli — powered by ${providerName}`);
+    const spinner = p.spinner();
+    spinner.start("Thinking...");
+    const provider = resolveProvider(providerName);
+    const planResult = await generatePlan(selected, provider, false);
+    spinner.stop("Plan ready");
+
+    p.log.info(`Goal: ${planResult.plan.goal}\n`);
+    planResult.plan.steps.forEach((step, i) => {
+      p.log.message(`  ${i + 1}. ${formatStep(step)}`);
+    });
+
+    await executePlan(planResult, providerName, selected, yes);
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Handle --resume
+  // ---------------------------------------------------------------------------
+  if (resume) {
+    const resumeState = await handleResume();
+    if (!resumeState) process.exit(0);
+
+    const data = loadResume()!;
+    const planResult = { plan: data.plan, usage: { input: 0, output: 0 } };
+
+    await executePlan(
+      planResult,
+      resumeState.provider,
+      resumeState.prompt,
+      yes,
+      resumeState.startFrom,
+    );
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Normal flow
+  // ---------------------------------------------------------------------------
   p.intro(
     `json-cli — powered by ${providerName}${dryRun ? "  (dry run)" : ""}${debug ? "  (debug)" : ""}`,
   );
@@ -116,7 +389,7 @@ async function main() {
   try {
     const provider = resolveProvider(providerName);
     planResult = await generatePlan(prompt, provider, debug);
-    spinner.stop(debug ? "" : "Plan ready");
+    spinner.stop(debug ? undefined : "Plan ready");
   } catch (err) {
     spinner.stop("Failed to generate plan");
     p.log.error(err instanceof Error ? err.message : String(err));
@@ -142,55 +415,18 @@ async function main() {
 
   // Step 4: Dry run — show plan and exit
   if (dryRun) {
-    const { input, output } = planResult.usage;
-    const cost = calculateCost(providerName, input, output);
-    const costStr = formatCost(cost);
-    const usageStr =
-      input > 0 || output > 0
-        ? `  |  tokens: ${input} in / ${output} out${costStr ? `  |  ${costStr}` : ""}`
-        : "";
-
+    const usageStr = formatUsage(
+      planResult.usage.input,
+      planResult.usage.output,
+      providerName,
+    );
     p.outro(`Dry run complete — no commands were executed.${usageStr}`);
     await new Promise((r) => setTimeout(r, 100));
     process.exit(0);
   }
 
-  // Step 5: Confirm — skip if --yes
-  if (!yes) {
-    const confirmed = await p.confirm({ message: "Proceed?" });
-    if (p.isCancel(confirmed) || !confirmed) {
-      p.cancel("Aborted.");
-      await new Promise((r) => setTimeout(r, 100));
-      process.exit(0);
-    }
-  } else {
-    p.log.info("Skipping confirmation (--yes)");
-  }
-
-  // Step 6: Execute
-  console.log("");
-  const result = await runPlan(planResult.plan, (step, i, total) => {
-    p.log.step(`Step ${i + 1}/${total}: ${formatStep(step)}`);
-  });
-
-  // Step 7: Result
-  if (result.success) {
-    const { input, output } = planResult.usage;
-    const cost = calculateCost(providerName, input, output);
-    const costStr = formatCost(cost);
-    const usageStr =
-      input > 0 || output > 0
-        ? `  |  tokens: ${input} in / ${output} out${costStr ? `  |  ${costStr}` : ""}`
-        : "";
-
-    p.outro(`✅ All steps completed successfully.${usageStr}`);
-  } else {
-    p.log.error(
-      `❌ Failed at step ${result.failedStep?.id}: ${result.failedStep?.description}\n${result.error ?? ""}`,
-    );
-    await new Promise((r) => setTimeout(r, 100));
-    process.exit(1);
-  }
+  // Step 5 - 7: Confirm + Execute
+  await executePlan(planResult, providerName, prompt, yes);
 }
 
 main();
