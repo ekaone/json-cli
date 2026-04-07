@@ -1,19 +1,28 @@
-import { buildCatalogPrompt, PlanSchema, validateStep } from "./catalog.js";
+import {
+  buildCatalogPrompt,
+  detectCatalogs,
+  createStepSchema,
+  createPlanSchema,
+  validateStep,
+  buildCommandMap,
+  getAllTypeEnums,
+  type Plan,
+} from "./catalogs/index.js";
 import type { AIProvider, TokenUsage } from "./providers/types.js";
-import type { Plan } from "./catalog.js";
 
 // ---------------------------------------------------------------------------
 // System prompt — constrains AI to only produce catalog-valid JSON
 // ---------------------------------------------------------------------------
-function buildSystemPrompt(): string {
+function buildSystemPrompt(cwd: string, forcedCatalogs?: string[]): string {
   return `You are a CLI task planner. Given a user's goal, generate a JSON execution plan.
 
-${buildCatalogPrompt()}
+${buildCatalogPrompt(cwd, forcedCatalogs)}
 
 Rules:
 - ONLY use command types and commands listed above
 - Prefer pnpm over npm unless the user specifies otherwise
 - Use "shell" type only when no other type fits
+- Use "fs" type for filesystem operations (mkdir, rm, cp, mv, touch, cat, ls)
 - Keep steps minimal — don't add unnecessary steps
 - Each step must have a clear, short description
 - NEVER generate a "cd" step — each step runs in a separate process so "cd" has no effect
@@ -51,8 +60,10 @@ export async function generatePlan(
   userPrompt: string,
   provider: AIProvider,
   debug: boolean = false,
+  cwd: string = process.cwd(),
+  forcedCatalogs?: string[],
 ): Promise<{ plan: Plan; usage: TokenUsage }> {
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(cwd, forcedCatalogs);
 
   if (debug) {
     console.log("┌");
@@ -91,7 +102,11 @@ export async function generatePlan(
     throw new Error(`AI returned invalid JSON:\n${cleaned}`);
   }
 
-  // Layer 2: Zod shape validation
+  // Layer 2: Zod shape validation (dynamic schema based on detected catalogs)
+  const allTypes = getAllTypeEnums(cwd, forcedCatalogs);
+  const StepSchema = createStepSchema(allTypes);
+  const PlanSchema = createPlanSchema(StepSchema);
+
   const result = PlanSchema.safeParse(parsed);
   if (!result.success) {
     const issues = result.error.issues
@@ -101,8 +116,9 @@ export async function generatePlan(
   }
 
   // Layer 3: Catalog whitelist validation
+  const commandMap = buildCommandMap(cwd, forcedCatalogs);
   for (const step of result.data.steps) {
-    const check = validateStep(step);
+    const check = validateStep(step, commandMap);
     if (!check.valid) {
       throw new Error(
         `Step ${step.id} failed catalog validation: ${check.reason}`,

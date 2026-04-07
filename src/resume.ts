@@ -1,23 +1,29 @@
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs";
+import {
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  mkdirSync,
+  existsSync,
+} from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import type { Plan } from "./catalog.js";
+import type { Plan } from "./catalogs/index.js";
 import type { ProviderName } from "./providers/index.js";
 
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
 const JSON_CLI_DIR = join(homedir(), ".json-cli");
-const RESUME_FILE  = join(JSON_CLI_DIR, "last-plan.json");
+const RESUME_FILE = join(JSON_CLI_DIR, "last-plan.json");
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 export interface ResumeData {
-  plan:      Plan;
-  failedAt:  number; // step index (0-based) to resume from
-  provider:  ProviderName;
-  prompt:    string;
+  plan: Plan;
+  failedAt: number; // step index (0-based) to resume from
+  provider: ProviderName;
+  prompt: string;
   timestamp: string;
 }
 

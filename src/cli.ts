@@ -11,7 +11,7 @@ import {
   clearHistory,
   hasHistory,
 } from "./history.js";
-import type { Step } from "./catalog.js";
+import type { Step } from "./catalogs/index.js";
 
 // ---------------------------------------------------------------------------
 // Help
@@ -23,6 +23,7 @@ function showHelp(): void {
   p.log.message(
     `Options
   --provider <name>   AI provider: claude | openai | ollama  (default: claude)
+  --catalogs <list>   Force specific catalogs: package,git,docker,fs (comma-separated)
   --yes               Skip confirmation prompt
   --dry-run           Show plan without executing
   --debug             Show system prompt and raw AI response
@@ -55,6 +56,7 @@ function showHelp(): void {
 function parseArgs(): {
   prompt: string;
   provider: ProviderName;
+  catalogs: string[] | undefined;
   yes: boolean;
   dryRun: boolean;
   debug: boolean;
@@ -82,6 +84,12 @@ function parseArgs(): {
   const provider: ProviderName =
     providerFlag !== -1 ? (args[providerFlag + 1] as ProviderName) : "claude";
 
+  const catalogsFlag = args.indexOf("--catalogs");
+  const catalogs: string[] | undefined =
+    catalogsFlag !== -1
+      ? args[catalogsFlag + 1]?.split(",").map((s) => s.trim())
+      : undefined;
+
   const yes = args.includes("--yes");
   const dryRun = args.includes("--dry-run");
   const debug = args.includes("--debug");
@@ -94,7 +102,8 @@ function parseArgs(): {
       (a, i) =>
         !a.startsWith("--") &&
         !a.startsWith("-v") &&
-        (providerFlag === -1 || i !== providerFlag + 1),
+        (providerFlag === -1 || i !== providerFlag + 1) &&
+        (catalogsFlag === -1 || i !== catalogsFlag + 1),
     )
     .join(" ");
 
@@ -107,6 +116,7 @@ function parseArgs(): {
   return {
     prompt,
     provider,
+    catalogs,
     yes,
     dryRun,
     debug,
@@ -312,6 +322,7 @@ async function main() {
   const {
     prompt,
     provider: providerName,
+    catalogs,
     yes,
     dryRun,
     debug,
@@ -342,7 +353,13 @@ async function main() {
     const spinner = p.spinner();
     spinner.start("Thinking...");
     const provider = resolveProvider(providerName);
-    const planResult = await generatePlan(selected, provider, false);
+    const planResult = await generatePlan(
+      selected,
+      provider,
+      false,
+      process.cwd(),
+      catalogs,
+    );
     spinner.stop("Plan ready");
 
     p.log.info(`Goal: ${planResult.plan.goal}\n`);
@@ -388,7 +405,13 @@ async function main() {
   let planResult;
   try {
     const provider = resolveProvider(providerName);
-    planResult = await generatePlan(prompt, provider, debug);
+    planResult = await generatePlan(
+      prompt,
+      provider,
+      debug,
+      process.cwd(),
+      catalogs,
+    );
     spinner.stop(debug ? undefined : "Plan ready");
   } catch (err) {
     spinner.stop("Failed to generate plan");
