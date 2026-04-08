@@ -2,7 +2,7 @@ import type { CatalogModule } from "./base.js";
 
 export const fsCatalog: CatalogModule = {
   name: "fs",
-  commands: ["mkdir", "rm", "cp", "mv", "touch", "cat", "ls"],
+  commands: ["mkdir", "rm", "cp", "mv", "touch", "cat", "ls", "dir"],
   detectors: [],
   typeEnum: ["fs"],
   buildPrompt() {

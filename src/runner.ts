@@ -1,4 +1,5 @@
 import { execa } from "execa";
+import { platform } from "os";
 import type { Plan, Step } from "./catalogs/index.js";
 
 // ---------------------------------------------------------------------------
@@ -9,7 +10,13 @@ function resolveCommand(step: Step): { bin: string; args: string[] } {
     case "shell":
       return { bin: step.command, args: step.args };
     case "fs":
-      // Filesystem commands need special handling
+      // Auto-map ls/dir based on platform for better cross-platform UX
+      if (step.command === "ls" && platform() === "win32") {
+        return { bin: "dir", args: step.args };
+      }
+      if (step.command === "dir" && platform() !== "win32") {
+        return { bin: "ls", args: step.args };
+      }
       return { bin: step.command, args: step.args };
     case "docker":
       return { bin: "docker", args: [step.command, ...step.args] };

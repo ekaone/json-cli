@@ -117,6 +117,7 @@ json-cli --help
 
   Options
     --provider <name>   AI provider: claude | openai | ollama  (default: claude)
+    --catalogs <list>   Force specific catalogs: package,git,docker,fs,shell (comma-separated)
     --yes               Skip confirmation prompt
     --dry-run           Show plan without executing
     --debug             Show system prompt and raw AI response
@@ -136,11 +137,47 @@ json-cli --help
     json-cli "run tests" --dry-run
     json-cli "run tests" --debug
     json-cli "run tests" --debug --dry-run
+    json-cli "deploy to prod" --catalogs docker
+    json-cli "list files in E:" --catalogs fs
     json-cli --resume
     json-cli --history
 
   Docs: https://github.com/ekaone/json-cli
 ```
+
+---
+
+## Catalogs (Command Whitelists)
+
+json-cli automatically detects which catalogs to use based on your project structure:
+
+| Catalog | Auto-detected when | Commands |
+|---------|-------------------|----------|
+| `package` | `package.json` exists | npm, pnpm, yarn, bun |
+| `git` | `.git/` folder exists | git init, add, commit, push, pull... |
+| `docker` | `Dockerfile` or `docker-compose.yml` exists | docker build, run, compose... |
+| `fs` | Always included | mkdir, rm, cp, mv, touch, cat, ls, dir |
+| `shell` | Always included | Any command (escape hatch) |
+
+### Force specific catalogs
+
+Use `--catalogs` to override auto-detection:
+
+```bash
+# Only use docker commands, even in a Node.js project
+json-cli "deploy to prod" --catalogs docker
+
+# Only filesystem commands
+json-cli "list files in E:" --catalogs fs
+
+# Multiple catalogs (comma-separated)
+json-cli "build and deploy" --catalogs package,docker
+```
+
+This is useful when you want to:
+- Exclude certain tools from the plan
+- Ensure only specific command types are used
+- Override auto-detection in CI/CD pipelines
 
 ---
 
@@ -177,7 +214,8 @@ Runner              ← executes step by step, streams output live
 | `yarn`  | install, run, build, test, publish, add, remove, why, upgrade |
 | `bun`   | install, run, build, test, publish, add, remove, x, update |
 | `git`   | init, add, commit, push, pull, clone, status, log, branch, checkout, merge, diff, stash |
-| `fs`    | mkdir, touch, cp, mv, ls  `(coming soon)` |
+| `docker`| build, run, compose, push, pull, exec, logs, ps, stop, start, rm, rmi |
+| `fs`    | mkdir, rm, cp, mv, touch, cat, ls, dir |
 | `shell` | any *(escape hatch — always requires extra confirmation)* |
 
 > **Note:** Flags and arguments are unrestricted, `--port 5000`, `-m "message"`, `--force` etc. are all passed freely. Only the command itself is whitelisted.

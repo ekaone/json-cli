@@ -23,7 +23,7 @@ function showHelp(): void {
   p.log.message(
     `Options
   --provider <name>   AI provider: claude | openai | ollama  (default: claude)
-  --catalogs <list>   Force specific catalogs: package,git,docker,fs (comma-separated)
+  --catalogs <list>   Force specific catalogs: package,git,docker,fs,shell (comma-separated)
   --yes               Skip confirmation prompt
   --dry-run           Show plan without executing
   --debug             Show system prompt and raw AI response
@@ -44,6 +44,8 @@ function showHelp(): void {
   json-cli "run tests" --dry-run
   json-cli "run tests" --debug
   json-cli "run tests" --debug --dry-run
+  json-cli "deploy to prod" --catalogs docker
+  json-cli "list files in E:" --catalogs fs
   json-cli --resume
   json-cli --history`,
   );
