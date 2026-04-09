@@ -1,6 +1,10 @@
-# json-cli
+# @ekaone/json-cli
 
-AI-powered CLI task runner. Write in plain English, AI generates a validated JSON command plan and finally runner executes it step by step.
+AI-powered CLI task runner. Just write in plain English, AI generates a validated JSON command plan, and the runner executes it step by step.
+
+## Think safety first
+> For safety, `json-cli` will generate the plan and ask for confirmation before running the steps. You can also use the `--dry-run` flag to preview the plan without executing it. 
+
 
 ## Installation
 
@@ -98,6 +102,10 @@ json-cli "run tests, check git diff, then git add and commit with message 'fix: 
 # Full CI-like flow locally
 json-cli "install deps, run typecheck, run tests, build, git add, commit with message 'ci: local pipeline passed', push"
 ```
+
+### More examples
+
+💡 There are a lot cool examples in the [examples](./examples/README.md) file.
 
 ### Options
 
