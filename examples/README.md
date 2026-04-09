@@ -69,7 +69,7 @@ json-cli "list files in current directory"
 ```
 
 ```bash
-json-cli "Create a new directory called 'project' and navigate into it"
+json-cli "Create a new directory called 'project' and run install into it"
 ```
 
 ```bash
