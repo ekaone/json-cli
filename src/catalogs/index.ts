@@ -1,11 +1,11 @@
 import { existsSync } from "fs";
 import { resolve } from "path";
 import type { CatalogModule } from "./base.js";
-import { packageCatalog } from "./package.js";
-import { gitCatalog } from "./git.js";
-import { dockerCatalog } from "./docker.js";
-import { fsCatalog } from "./fs.js";
-import { shellCatalog } from "./shell.js";
+import { packageCatalog } from "./package/index.js";
+import { gitCatalog } from "./git/index.js";
+import { dockerCatalog } from "./docker/index.js";
+import { fsCatalog } from "./fs/index.js";
+import { shellCatalog } from "./shell/index.js";
 
 // ---------------------------------------------------------------------------
 // All available catalogs

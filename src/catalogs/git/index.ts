@@ -1,4 +1,4 @@
-import type { CatalogModule } from "./base.js";
+import type { CatalogModule } from "../base.js";
 
 export const gitCatalog: CatalogModule = {
   name: "git",
