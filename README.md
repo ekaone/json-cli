@@ -66,6 +66,8 @@ json-cli "run tests, check git diff, then git add and commit with message 'fix: 
 
 ### Vercel + Resend examples
 
+> Use `--catalogs` to force specific catalogs (recommended), but you can also let `json-cli` auto-detect them.
+
 ```bash
 json-cli "deploy to vercel production" --catalogs vercel --dry-run --debug
 json-cli "send email to ekaone@gmail.com from no-reply@support.com with subject 'Hello' and body 'How are you?'" --catalogs resend --dry-run --debug

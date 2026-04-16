@@ -31,7 +31,7 @@ Rules:
 - Prefer pnpm over npm unless the user specifies otherwise
 - Use "shell" type only when no other type fits
 - Use "fs" type for filesystem operations (mkdir, rm, cp, mv, touch, cat, ls)
-- Keep steps minimal — don't add unnecessary steps
+- Do NOT add dependency installation steps (install/ci) unless user explicitly asks to install/setup dependencies
 - Each step must have a clear, short description
 - NEVER generate a "cd" step — each step runs in a separate process so "cd" has no effect
 - If subsequent steps need to run inside a cloned directory, set the "cwd" field instead
@@ -159,6 +159,39 @@ function findGuardrailFailure(plan: Plan): { failure?: StepFailure; warnings: st
   };
 }
 
+function userAskedForDependencyInstall(userPrompt: string): boolean {
+  const lower = userPrompt.toLowerCase();
+  const patterns = [
+    /\binstall\b/,
+    /\bdeps?\b/,
+    /\bdependencies\b/,
+    /\bsetup\b/,
+    /\bset up\b/,
+    /\bbootstrap\b/,
+    /\bnpm ci\b/,
+    /\bpnpm install\b/,
+    /\byarn install\b/,
+    /\bbun install\b/,
+  ];
+  return patterns.some((p) => p.test(lower));
+}
+
+function pruneUnrequestedInstallSteps(plan: Plan, userPrompt: string): Plan {
+  if (userAskedForDependencyInstall(userPrompt)) return plan;
+
+  const steps = plan.steps.filter((step) => {
+    const isPackageManager =
+      step.type === "npm" ||
+      step.type === "pnpm" ||
+      step.type === "yarn" ||
+      step.type === "bun";
+    if (!isPackageManager) return true;
+    return step.command !== "install" && step.command !== "ci";
+  });
+
+  if (steps.length === plan.steps.length || steps.length === 0) return plan;
+  return { ...plan, steps };
+}
 function buildRepairSystemPrompt(
   catalog: CatalogModule,
   cwd: string,
@@ -322,6 +355,7 @@ export async function generatePlan(
     ...result.data,
     steps: result.data.steps.map((step) => normalizeStepCommand(step, catalogMap)),
   };
+  normalizedPlan = pruneUnrequestedInstallSteps(normalizedPlan, userPrompt);
   let usage = response.usage;
   let allWarnings: string[] = [];
 
@@ -375,6 +409,7 @@ export async function generatePlan(
             : s,
         ),
       };
+      normalizedPlan = pruneUnrequestedInstallSteps(normalizedPlan, userPrompt);
       continue;
     }
 
@@ -427,6 +462,7 @@ export async function generatePlan(
             : s,
         ),
       };
+      normalizedPlan = pruneUnrequestedInstallSteps(normalizedPlan, userPrompt);
       continue;
     }
 
@@ -440,3 +476,8 @@ export async function generatePlan(
     warnings: allWarnings,
   };
 }
+
+
+
+
+

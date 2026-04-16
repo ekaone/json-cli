@@ -230,4 +230,60 @@ describe("generatePlan", () => {
     expect(result.plan.steps[0].type).toBe("git");
     expect(result.plan.steps[0].command).toBe("diff");
   });
+
+  it("prunes unrequested install step for build-only intent", async () => {
+    const planWithInstall = JSON.stringify({
+      goal: "build app",
+      steps: [
+        {
+          id: 1,
+          type: "pnpm",
+          command: "install",
+          args: [],
+          description: "Install deps",
+        },
+        {
+          id: 2,
+          type: "pnpm",
+          command: "build",
+          args: [],
+          description: "Build app",
+        },
+      ],
+    });
+
+    const result = await generatePlan("build app", mockProvider(planWithInstall));
+    expect(result.plan.steps).toHaveLength(1);
+    expect(result.plan.steps[0].command).toBe("build");
+  });
+
+  it("keeps install step when user explicitly asks for deps install", async () => {
+    const planWithInstall = JSON.stringify({
+      goal: "install deps and build app",
+      steps: [
+        {
+          id: 1,
+          type: "pnpm",
+          command: "install",
+          args: [],
+          description: "Install deps",
+        },
+        {
+          id: 2,
+          type: "pnpm",
+          command: "build",
+          args: [],
+          description: "Build app",
+        },
+      ],
+    });
+
+    const result = await generatePlan(
+      "install deps and build app",
+      mockProvider(planWithInstall),
+    );
+    expect(result.plan.steps).toHaveLength(2);
+    expect(result.plan.steps[0].command).toBe("install");
+    expect(result.plan.steps[1].command).toBe("build");
+  });
 });
