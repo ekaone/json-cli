@@ -6,11 +6,13 @@ import {
   buildCatalogMap,
   getAllTypeEnums,
   getCommandNames,
+  type CatalogModule,
   type Plan,
   type Step,
 } from "./catalogs/index.js";
 import type { AIProvider, TokenUsage } from "./providers/types.js";
 import { applyGuardrails } from "./guardrails.js";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // System prompt — constrains AI to only produce catalog-valid JSON
@@ -68,7 +70,24 @@ export interface PlanResult {
   warnings: string[];
 }
 
-function normalizeStepCommand(step: Step, catalogMap: ReturnType<typeof buildCatalogMap>): Step {
+const MAX_REPAIR_ATTEMPTS = 2;
+
+interface StepFailure {
+  stepId: number;
+  reason: string;
+}
+
+function sumUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
+  return {
+    input: a.input + b.input,
+    output: a.output + b.output,
+  };
+}
+
+function normalizeStepCommand(
+  step: Step,
+  catalogMap: ReturnType<typeof buildCatalogMap>,
+): Step {
   const raw = step.command.trim();
   if (!raw.includes(" ")) return step;
 
@@ -92,6 +111,150 @@ function normalizeStepCommand(step: Step, catalogMap: ReturnType<typeof buildCat
     command: topLevel,
     args,
   };
+}
+
+function findCatalogFailure(
+  plan: Plan,
+  catalogMap: ReturnType<typeof buildCatalogMap>,
+): { failure?: StepFailure; warnings: string[] } {
+  const warnings: string[] = [];
+  for (const step of plan.steps) {
+    const check = validateStep(step, catalogMap);
+    if (!check.valid) {
+      return {
+        failure: {
+          stepId: step.id,
+          reason: check.reason ?? "Unknown catalog validation error",
+        },
+        warnings,
+      };
+    }
+    if (check.warnings) warnings.push(...check.warnings);
+  }
+  return { warnings };
+}
+
+function findGuardrailFailure(plan: Plan): { failure?: StepFailure; warnings: string[] } {
+  const guardrailResult = applyGuardrails(plan.steps);
+  if (guardrailResult.ok) return { warnings: guardrailResult.warnings };
+
+  const firstError = guardrailResult.errors[0];
+  const match = firstError.match(/^Step\s+(\d+):\s*(.+)$/i);
+  if (!match) {
+    return {
+      failure: {
+        stepId: plan.steps[0]?.id ?? 1,
+        reason: firstError,
+      },
+      warnings: guardrailResult.warnings,
+    };
+  }
+
+  return {
+    failure: {
+      stepId: Number(match[1]),
+      reason: match[2],
+    },
+    warnings: guardrailResult.warnings,
+  };
+}
+
+function buildRepairSystemPrompt(
+  catalog: CatalogModule,
+  cwd: string,
+  userPrompt: string,
+): string {
+  return `You repair exactly one invalid CLI plan step.
+
+${buildCatalogPrompt(cwd, [catalog.name], userPrompt)}
+
+Rules:
+- Return JSON only (no markdown).
+- Keep id and type unchanged.
+- command MUST be a valid top-level command for this type.
+- Put subcommands and values in args[] as separate tokens.
+- Do not include secrets/tokens/passwords/api keys in args.
+- If required values are missing from user intent, keep placeholders short and explicit.
+
+Output shape:
+{
+  "id": 1,
+  "type": "catalog-type",
+  "command": "command",
+  "args": ["--flag", "value"],
+  "description": "short action description",
+  "cwd": null
+}`;
+}
+
+async function repairStepWithAI(
+  provider: AIProvider,
+  input: {
+    goal: string;
+    userPrompt: string;
+    failingStep: Step;
+    failureReason: string;
+    catalog: CatalogModule;
+    cwd: string;
+    debug: boolean;
+  },
+): Promise<{ step: Step; usage: TokenUsage }> {
+  const systemPrompt = buildRepairSystemPrompt(
+    input.catalog,
+    input.cwd,
+    input.userPrompt,
+  );
+  const repairPrompt = `Goal: ${input.goal}
+User request: ${input.userPrompt}
+Validation error: ${input.failureReason}
+
+Invalid step JSON:
+${JSON.stringify(input.failingStep, null, 2)}
+
+Return only corrected step JSON.`;
+
+  const response = await provider.generate(repairPrompt, systemPrompt);
+  const cleaned = response.content.replace(/```json|```/g, "").trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Repair AI returned invalid JSON:\n${cleaned}`);
+  }
+
+  const RepairStepSchema = z.object({
+    id: z.number(),
+    type: z.string(),
+    command: z.string(),
+    args: z.array(z.string()).default([]),
+    description: z.string(),
+    cwd: z.string().nullable().optional(),
+  });
+
+  const result = RepairStepSchema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
+    throw new Error(`Repair step failed schema validation:\n${issues}`);
+  }
+
+  if (input.debug) {
+    console.log("●  Repair response:");
+    console.log(
+      "│  " + JSON.stringify(result.data, null, 2).split("\n").join("\n│  "),
+    );
+    console.log("│");
+  }
+
+  const repairedStep: Step = {
+    ...result.data,
+    id: input.failingStep.id,
+    type: input.failingStep.type,
+  };
+
+  return { step: repairedStep, usage: response.usage };
 }
 
 export async function generatePlan(
@@ -153,38 +316,127 @@ export async function generatePlan(
     throw new Error(`Plan failed schema validation:\n${issues}`);
   }
 
-  // Layer 3: Catalog whitelist + arg-level validation
+  // Layer 3: Catalog whitelist + arg-level validation (+ targeted repair loop)
   const catalogMap = buildCatalogMap(cwd, forcedCatalogs, userPrompt);
-  const normalizedPlan: Plan = {
+  let normalizedPlan: Plan = {
     ...result.data,
     steps: result.data.steps.map((step) => normalizeStepCommand(step, catalogMap)),
   };
+  let usage = response.usage;
+  let allWarnings: string[] = [];
 
-  const allWarnings: string[] = [];
-  for (const step of normalizedPlan.steps) {
-    const check = validateStep(step, catalogMap);
-    if (!check.valid) {
-      throw new Error(
-        `Step ${step.id} failed catalog validation: ${check.reason}`,
+  for (let attempt = 0; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
+    const catalogCheck = findCatalogFailure(normalizedPlan, catalogMap);
+    if (catalogCheck.failure) {
+      if (attempt === MAX_REPAIR_ATTEMPTS) {
+        throw new Error(
+          `Step ${catalogCheck.failure.stepId} failed catalog validation: ${catalogCheck.failure.reason}`,
+        );
+      }
+
+      const failingStep = normalizedPlan.steps.find(
+        (s) => s.id === catalogCheck.failure!.stepId,
       );
-    }
-    if (check.warnings) {
-      allWarnings.push(...check.warnings);
-    }
-  }
+      if (!failingStep) {
+        throw new Error(
+          `Step ${catalogCheck.failure.stepId} failed catalog validation: ${catalogCheck.failure.reason}`,
+        );
+      }
+      const catalog = catalogMap.get(failingStep.type);
+      if (!catalog) {
+        throw new Error(
+          `Step ${catalogCheck.failure.stepId} failed catalog validation: Unknown type "${failingStep.type}"`,
+        );
+      }
 
-  // Layer 3.5: Generic safety guardrails
-  const guardrailResult = applyGuardrails(normalizedPlan.steps);
-  if (!guardrailResult.ok) {
-    throw new Error(
-      `Safety guardrail violations:\n${guardrailResult.errors.join("\n")}`,
-    );
+      if (debug) {
+        console.log(
+          `●  Repairing step ${failingStep.id} (catalog): ${catalogCheck.failure.reason}`,
+        );
+        console.log("│");
+      }
+
+      const repaired = await repairStepWithAI(provider, {
+        goal: normalizedPlan.goal,
+        userPrompt,
+        failingStep,
+        failureReason: catalogCheck.failure.reason,
+        catalog,
+        cwd,
+        debug,
+      });
+      usage = sumUsage(usage, repaired.usage);
+
+      normalizedPlan = {
+        ...normalizedPlan,
+        steps: normalizedPlan.steps.map((s) =>
+          s.id === failingStep.id
+            ? normalizeStepCommand(repaired.step, catalogMap)
+            : s,
+        ),
+      };
+      continue;
+    }
+
+    const guardrailCheck = findGuardrailFailure(normalizedPlan);
+    if (guardrailCheck.failure) {
+      if (attempt === MAX_REPAIR_ATTEMPTS) {
+        throw new Error(
+          `Safety guardrail violations:\nStep ${guardrailCheck.failure.stepId}: ${guardrailCheck.failure.reason}`,
+        );
+      }
+
+      const failingStep = normalizedPlan.steps.find(
+        (s) => s.id === guardrailCheck.failure!.stepId,
+      );
+      if (!failingStep) {
+        throw new Error(
+          `Safety guardrail violations:\nStep ${guardrailCheck.failure.stepId}: ${guardrailCheck.failure.reason}`,
+        );
+      }
+      const catalog = catalogMap.get(failingStep.type);
+      if (!catalog) {
+        throw new Error(
+          `Safety guardrail violations:\nStep ${guardrailCheck.failure.stepId}: ${guardrailCheck.failure.reason}`,
+        );
+      }
+
+      if (debug) {
+        console.log(
+          `●  Repairing step ${failingStep.id} (guardrail): ${guardrailCheck.failure.reason}`,
+        );
+        console.log("│");
+      }
+
+      const repaired = await repairStepWithAI(provider, {
+        goal: normalizedPlan.goal,
+        userPrompt,
+        failingStep,
+        failureReason: guardrailCheck.failure.reason,
+        catalog,
+        cwd,
+        debug,
+      });
+      usage = sumUsage(usage, repaired.usage);
+
+      normalizedPlan = {
+        ...normalizedPlan,
+        steps: normalizedPlan.steps.map((s) =>
+          s.id === failingStep.id
+            ? normalizeStepCommand(repaired.step, catalogMap)
+            : s,
+        ),
+      };
+      continue;
+    }
+
+    allWarnings = [...catalogCheck.warnings, ...guardrailCheck.warnings];
+    break;
   }
-  allWarnings.push(...guardrailResult.warnings);
 
   return {
     plan: normalizedPlan,
-    usage: response.usage,
+    usage,
     warnings: allWarnings,
   };
 }

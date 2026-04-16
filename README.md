@@ -1,10 +1,15 @@
 # @ekaone/json-cli
 
-AI-powered CLI task runner. Just write in plain English, AI generates a validated JSON command plan, and the runner executes it step by step.
+AI-powered CLI task runner. Write plain English goals, get a validated JSON plan, then execute step-by-step.
 
 ## Think safety first
-> For safety, `json-cli` will generate the plan and ask for confirmation before running the steps. You can also use the `--dry-run` flag to preview the plan without executing it. 
 
+For safety, `json-cli`:
+- generates a plan first
+- validates schema + catalog rules + guardrails
+- asks for confirmation before execution
+
+Use `--dry-run` to preview the plan without executing commands.
 
 ## Installation
 
@@ -22,26 +27,28 @@ yarn global add @ekaone/json-cli
 
 ## Setup
 
-> **Note:** Default provider is Claude when --provider flag isn't provided
+Default provider is Claude when `--provider` is not set.
 
 ```bash
-// Claude
+# Claude
 export ANTHROPIC_API_KEY=your_key_here
 
-// OpenAI
+# OpenAI
 export OPENAI_API_KEY=your_key_here
 
-// Ollama
+# Ollama
 export OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-> Windows PowerShell: `$env:ANTHROPIC_API_KEY="your_key_here"`
+Windows PowerShell:
 
----
+```powershell
+$env:ANTHROPIC_API_KEY="your_key_here"
+```
 
 ## Usage
 
-### Single intent
+### Basic
 
 ```bash
 json-cli "please run tests"
@@ -49,197 +56,109 @@ json-cli "please build"
 json-cli "check git status"
 ```
 
-### Multi-intent — the fun part 🔥
-
-Chain multiple commands in plain English using **"then"**, **"and"**, **"after that"**:
+### Multi-intent
 
 ```bash
 json-cli "run tests and then build"
-```
-
-```bash
 json-cli "run typecheck, test, and then check git status"
-```
-
-```bash
-json-cli "please run dev with port 5000"
-```
-
-```bash
-json-cli "install deps, run tests, then build"
-```
-
-### Full release flow in one command 🚀
-
-```bash
-json-cli "run tests, build, git add all, commit with message 'release v0.1.0', push, then publish"
-```
-
-```
-📋 Plan (6 steps):
-  1. pnpm test                → Run test suite
-  2. pnpm build               → Build package
-  3. git add .                → Stage all changes
-  4. git commit -m "release v0.1.0"  → Commit release
-  5. git push                 → Push to remote
-  6. pnpm publish             → Publish to npm
-
-Proceed? › y
-```
-
-### More crazy examples
-
-```bash
-# Full dev startup
-json-cli "install deps and run dev on port 3000"
-
-# Audit and fix
-json-cli "run npm audit, then update all deps"
-
-# Branch and commit workflow
-json-cli "check git status, add all files, commit with message 'feat: add multi-intent support', then push"
-
-# Test everything before shipping
-json-cli "run typecheck, run tests, build, then publish"
-
-# Clone and install
-json-cli "clone https://github.com/ekaone/json-cli and then install deps"
-
-# Check before commit
 json-cli "run tests, check git diff, then git add and commit with message 'fix: catalog types'"
-
-# Full CI-like flow locally
-json-cli "install deps, run typecheck, run tests, build, git add, commit with message 'ci: local pipeline passed', push"
 ```
 
-### More examples
-
-💡 There are a lot cool examples in the [examples](./examples/README.md) file.
-
-### Options
+### Vercel + Resend examples
 
 ```bash
-json-cli
-# or
-json-cli --help
-```
-```
-  json-cli — AI-powered CLI task runner
-
-  Usage
-    json-cli "<your goal>" [options]
-
-  Alias
-    jc "<your goal>" [options]
-
-  Options
-    --provider <name>   AI provider: claude | openai | ollama  (default: claude)
-    --catalogs <list>   Force specific catalogs: package,git,docker,fs,shell (comma-separated)
-    --yes               Skip confirmation prompt
-    --dry-run           Show plan without executing
-    --debug             Show system prompt and raw AI response
-    --resume            Resume from last failed step
-    --history           Browse and re-run past commands
-    --history --clear   Clear command history
-    --help              Show this help message
-    --version, -v       Show version
-
-  Examples
-    json-cli "please run tests"
-    json-cli "run tests and build"
-    json-cli "run tests and build" --yes
-    json-cli "git add, commit with message 'fix: bug', push"
-    json-cli "clone https://github.com/user/repo, install deps, run dev"
-    json-cli "run tests and publish" --provider openai
-    json-cli "run tests" --dry-run
-    json-cli "run tests" --debug
-    json-cli "run tests" --debug --dry-run
-    json-cli "deploy to prod" --catalogs docker
-    json-cli "list files in E:" --catalogs fs
-    json-cli --resume
-    json-cli --history
-
-  Docs: https://github.com/ekaone/json-cli
+json-cli "deploy to vercel production" --catalogs vercel --dry-run --debug
+json-cli "send email to ekaone@gmail.com from no-reply@support.com with subject 'Hello' and body 'How are you?'" --catalogs resend --dry-run --debug
+json-cli "build app, deploy to vercel production, then send deployment email to ekaone@gmail.com" --catalogs package,vercel,resend --dry-run --debug
 ```
 
----
+## Options
 
-## Catalogs (Command Whitelists)
+```text
+json-cli "<your goal>" [options]
 
-json-cli automatically detects which catalogs to use based on your project structure:
+Alias:
+  jc "<your goal>" [options]
 
-| Catalog | Auto-detected when | Commands |
-|---------|-------------------|----------|
-| `package` | `package.json` exists | npm, pnpm, yarn, bun |
-| `git` | `.git/` folder exists | git init, add, commit, push, pull... |
-| `docker` | `Dockerfile` or `docker-compose.yml` exists | docker build, run, compose... |
-| `fs` | Always included | mkdir, rm, cp, mv, touch, cat, ls, dir |
-| `shell` | Always included | Any command (escape hatch) |
+Options:
+  --provider <name>   AI provider: claude | openai | ollama  (default: claude)
+  --catalogs <list>   Force specific catalogs: package,git,docker,fs,shell,vercel,resend (comma-separated)
+  --yes               Skip confirmation prompt
+  --dry-run           Show plan without executing
+  --debug             Show system prompt and raw AI response
+  --resume            Resume from last failed step
+  --history           Browse and re-run past commands
+  --history --clear   Clear command history
+  --help              Show this help message
+  --version, -v       Show version
+```
 
-### Force specific catalogs
+## Catalogs (command whitelists)
 
-Use `--catalogs` to override auto-detection:
+`json-cli` auto-detects active catalogs from project files and prompt intent.
+
+| Catalog | Auto-detected when | Types/commands |
+|---|---|---|
+| `package` | `package.json` exists | `npm`, `pnpm`, `yarn`, `bun` |
+| `git` | `.git/` exists | git commands |
+| `docker` | `Dockerfile` / compose file exists | docker commands |
+| `fs` | always included | filesystem commands |
+| `shell` | always included | any shell command (escape hatch) |
+| `vercel` | `.vercel` / `vercel.json` exists or deploy-related intent | vercel commands |
+| `resend` | email/resend-related intent | resend commands |
+
+Force catalogs with `--catalogs`:
 
 ```bash
-# Only use docker commands, even in a Node.js project
-json-cli "deploy to prod" --catalogs docker
-
-# Only filesystem commands
+json-cli "deploy to prod" --catalogs vercel
 json-cli "list files in E:" --catalogs fs
-
-# Multiple catalogs (comma-separated)
-json-cli "build and deploy" --catalogs package,docker
+json-cli "build and deploy" --catalogs package,vercel
 ```
-
-This is useful when you want to:
-- Exclude certain tools from the plan
-- Ensure only specific command types are used
-- Override auto-detection in CI/CD pipelines
-
----
 
 ## How it works
 
-```
-User Prompt (plain English)
-    │
-    ▼
-AI Provider         ← Claude / OpenAI / Ollama
-    │               extracts ALL intents, sequences them
-    ▼
-JSON Plan           ← validated by Zod schema (max 10 steps)
-    │
-    ▼
-Catalog Check       ← whitelist prevents hallucinated commands
-    │
-    ▼
-Confirm (y/n)       ← review the full plan before execution
-    │
-    ▼
-Runner              ← executes step by step, streams output live
-                       stops immediately on first failure
+```text
+User prompt
+  -> AI plan (JSON)
+  -> Schema validation
+  -> Catalog validation
+  -> Guardrail validation
+  -> Targeted repair loop (step-level, when needed)
+  -> Confirm
+  -> Execute step-by-step
 ```
 
----
+## Targeted repair loop
 
-## Allowed commands
+If one step fails validation, `json-cli` repairs only the failing step (instead of regenerating the whole plan), then re-validates.
 
-| Type    | Commands |
-|---------|----------|
-| `pnpm`  | install, run, build, test, publish, add, remove, update, dlx, why |
-| `npm`   | install, run, build, test, publish, ci, init, outdated, audit |
-| `yarn`  | install, run, build, test, publish, add, remove, why, upgrade |
-| `bun`   | install, run, build, test, publish, add, remove, x, update |
-| `git`   | init, add, commit, push, pull, clone, status, log, branch, checkout, merge, diff, stash |
-| `docker`| build, run, compose, push, pull, exec, logs, ps, stop, start, rm, rmi |
-| `fs`    | mkdir, rm, cp, mv, touch, cat, ls, dir |
-| `shell` | any *(escape hatch — always requires extra confirmation)* |
+Flow:
+1. detect failing step + exact reason
+2. ask AI to repair that step only (catalog-scoped)
+3. validate again
+4. continue or fail clearly after retry limit
 
-> **Note:** Flags and arguments are unrestricted, `--port 5000`, `-m "message"`, `--force` etc. are all passed freely. Only the command itself is whitelisted.
+## Allowed command sets
 
----
+| Type | Commands |
+|---|---|
+| `npm` | install, run, build, test, publish, ci, add, remove |
+| `pnpm` | install, run, build, test, publish, ci, add, remove |
+| `yarn` | install, run, build, test, publish, ci, add, remove |
+| `bun` | install, run, build, test, publish, ci, add, remove |
+| `git` | init, add, commit, push, pull, clone, status, diff, log, branch, checkout, merge, stash |
+| `docker` | build, run, compose, push, pull, exec, logs, ps, stop, start, rm, rmi |
+| `fs` | mkdir, rm, cp, mv, touch, cat, ls, dir |
+| `vercel` | deploy, build, dev, pull, env, logs, link, login, logout, list, inspect, promote, domains, project |
+| `resend` | emails, domains, api-keys, broadcasts, contacts, audiences, webhooks, templates, login, logout, doctor |
+| `shell` | any command (escape hatch) |
 
-## AI Providers
+Notes:
+- Commands are whitelisted per catalog.
+- Some catalogs enforce required/conflicting/forbidden flags.
+- Guardrails block obvious secret leakage and malformed flags.
+
+## AI providers
 
 ```bash
 # Claude (default)
@@ -248,39 +167,29 @@ json-cli "run tests and build"
 # OpenAI
 json-cli "run tests and build" --provider openai
 
-# Ollama (local, no API key needed)
+# Ollama
 json-cli "run tests and build" --provider ollama
 ```
-
-## Environment variables
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...   # for Claude
-OPENAI_API_KEY=sk-...          # for OpenAI
-```
-
----
 
 ## Local development
 
 ```bash
 pnpm install
 pnpm dev "please run tests"
+pnpm typecheck
 pnpm test
 pnpm build
 ```
 
 ## Pricing
 
-> **Note:** [Pricing](./src/providers/pricing.ts) is based on the lastest rates from each provider. Write an [issue](https://github.com/ekaone/json-cli/issues) if you find any outdated pricing.
+Pricing config is in [`src/providers/pricing.ts`](./src/providers/pricing.ts). Open an issue if rates are outdated.
 
-| Provider | Input Cost (per 1M tokens) | Output Cost (per 1M tokens) |
-|----------|----------------------------|-----------------------------|
-| Claude   | $3.00                      | $15.00                      |
-| OpenAI   | $2.50                      | $10.00                      |
-| Ollama   | $0.00                      | $0.00                       |
-
----
+| Provider | Input (per 1M tokens) | Output (per 1M tokens) |
+|---|---:|---:|
+| Claude | $3.00 | $15.00 |
+| OpenAI | $2.50 | $10.00 |
+| Ollama | $0.00 | $0.00 |
 
 ## License
 
@@ -288,8 +197,6 @@ MIT © [Eka Prasetia](./LICENSE)
 
 ## Links
 
-- [npm Package](https://www.npmjs.com/package/@ekaone/json-cli)
-- [GitHub Repository](https://github.com/ekaone/json-cli)
-- [Issue Tracker](https://github.com/ekaone/json-cli/issues)
-
-⭐ If this library helps you, please consider giving it a star on GitHub!
+- [npm package](https://www.npmjs.com/package/@ekaone/json-cli)
+- [GitHub repository](https://github.com/ekaone/json-cli)
+- [Issue tracker](https://github.com/ekaone/json-cli/issues)

@@ -10,6 +10,7 @@ export const gitCatalog: CatalogModule = {
     "pull",
     "clone",
     "status",
+    "diff",
     "log",
     "branch",
     "checkout",

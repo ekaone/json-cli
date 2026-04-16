@@ -15,6 +15,21 @@ function mockProvider(response: string): AIProvider {
   };
 }
 
+function mockProviderSequence(responses: string[]): AIProvider {
+  const queue = [...responses];
+  return {
+    name: "mock-seq",
+    generate: vi.fn().mockImplementation(async () => {
+      const content = queue.shift();
+      if (!content) throw new Error("No more mocked responses in sequence");
+      return {
+        content,
+        usage: { input: 100, output: 50 },
+      };
+    }),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Valid plan fixture
 // ---------------------------------------------------------------------------
@@ -89,9 +104,10 @@ describe("generatePlan", () => {
         },
       ],
     });
-    await expect(
-      generatePlan("anything", mockProvider(hallucinated)),
-    ).rejects.toThrow("catalog validation");
+    const provider = mockProviderSequence([hallucinated, hallucinated, hallucinated]);
+    await expect(generatePlan("anything", provider)).rejects.toThrow(
+      "Repair step failed schema validation",
+    );
   });
 
   it("normalizes combined command token into command + args", async () => {
@@ -127,5 +143,91 @@ describe("generatePlan", () => {
 
     expect(result.plan.steps[0].command).toBe("emails");
     expect(result.plan.steps[0].args[0]).toBe("send");
+  });
+
+  it("repairs a failing step via targeted repair loop (catalog validation)", async () => {
+    const invalidInitialPlan = JSON.stringify({
+      goal: "send an email",
+      steps: [
+        {
+          id: 1,
+          type: "resend",
+          command: "unknown",
+          args: [],
+          description: "Invalid command",
+        },
+      ],
+    });
+    const repairedStep = JSON.stringify({
+      id: 1,
+      type: "resend",
+      command: "login",
+      args: [],
+      description: "Login to Resend",
+      cwd: null,
+    });
+
+    const provider = mockProviderSequence([invalidInitialPlan, repairedStep]);
+    const result = await generatePlan(
+      "send email",
+      provider,
+      false,
+      process.cwd(),
+      ["resend"],
+    );
+
+    expect(result.plan.steps[0].command).toBe("login");
+    expect(result.plan.steps[0].args).toHaveLength(0);
+    expect(result.usage.input).toBe(200);
+    expect(result.usage.output).toBe(100);
+  });
+
+  it("repairs a failing step via targeted repair loop (guardrail)", async () => {
+    const invalidInitialPlan = JSON.stringify({
+      goal: "commit changes",
+      steps: [
+        {
+          id: 1,
+          type: "git",
+          command: "commit",
+          args: ["-message", "fix: test"],
+          description: "Commit changes",
+        },
+      ],
+    });
+    const repairedStep = JSON.stringify({
+      id: 1,
+      type: "git",
+      command: "commit",
+      args: ["-m", "fix: test"],
+      description: "Commit changes",
+      cwd: null,
+    });
+
+    const provider = mockProviderSequence([invalidInitialPlan, repairedStep]);
+    const result = await generatePlan("commit changes", provider);
+
+    expect(result.plan.steps[0].args[0]).toBe("-m");
+    expect(result.usage.input).toBe(200);
+    expect(result.usage.output).toBe(100);
+  });
+
+  it("accepts git diff as a git catalog command", async () => {
+    const gitDiffPlan = JSON.stringify({
+      goal: "check git diff",
+      steps: [
+        {
+          id: 1,
+          type: "git",
+          command: "diff",
+          args: [],
+          description: "Check git diff",
+        },
+      ],
+    });
+
+    const result = await generatePlan("check git diff", mockProvider(gitDiffPlan));
+    expect(result.plan.steps[0].type).toBe("git");
+    expect(result.plan.steps[0].command).toBe("diff");
   });
 });
