@@ -22,8 +22,17 @@ yarn global add @ekaone/json-cli
 
 ## Setup
 
+> **Note:** Default provider is Claude when --provider flag isn't provided
+
 ```bash
+// Claude
 export ANTHROPIC_API_KEY=your_key_here
+
+// OpenAI
+export OPENAI_API_KEY=your_key_here
+
+// Ollama
+export OLLAMA_BASE_URL=http://localhost:11434
 ```
 
 > Windows PowerShell: `$env:ANTHROPIC_API_KEY="your_key_here"`
@@ -275,7 +284,7 @@ pnpm build
 
 ## License
 
-MIT © [Eka Prasetia](https://prasetia.me/)
+MIT © [Eka Prasetia](./LICENSE)
 
 ## Links
 

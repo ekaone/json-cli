@@ -2,7 +2,7 @@ import type { AIProvider, TokenUsage } from "./types.js";
 
 export function createOllamaProvider(
   model = "llama3.2",
-  baseUrl = "http://localhost:11434",
+  baseUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
 ): AIProvider {
   return {
     name: `ollama/${model}`,

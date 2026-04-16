@@ -23,7 +23,7 @@ function showHelp(): void {
   p.log.message(
     `Options
   --provider <name>   AI provider: claude | openai | ollama  (default: claude)
-  --catalogs <list>   Force specific catalogs: package,git,docker,fs,shell (comma-separated)
+  --catalogs <list>   Force specific catalogs: package,git,docker,fs,shell,vercel,resend (comma-separated, optional)
   --yes               Skip confirmation prompt
   --dry-run           Show plan without executing
   --debug             Show system prompt and raw AI response
@@ -45,6 +45,7 @@ function showHelp(): void {
   json-cli "run tests" --debug
   json-cli "run tests" --debug --dry-run
   json-cli "deploy to prod" --catalogs docker
+  json-cli "send welcome email" --catalogs resend
   json-cli "list files in E:" --catalogs fs
   json-cli --resume
   json-cli --history`,
@@ -369,6 +370,10 @@ async function main() {
       p.log.message(`  ${i + 1}. ${formatStep(step)}`);
     });
 
+    if (planResult.warnings.length > 0) {
+      planResult.warnings.forEach((w) => p.log.warn(w));
+    }
+
     await executePlan(planResult, providerName, selected, yes);
     return;
   }
@@ -381,7 +386,11 @@ async function main() {
     if (!resumeState) process.exit(0);
 
     const data = loadResume()!;
-    const planResult = { plan: data.plan, usage: { input: 0, output: 0 } };
+    const planResult = {
+      plan: data.plan,
+      usage: { input: 0, output: 0 },
+      warnings: [],
+    };
 
     await executePlan(
       planResult,
@@ -418,6 +427,7 @@ async function main() {
   } catch (err) {
     spinner.stop("Failed to generate plan");
     p.log.error(err instanceof Error ? err.message : String(err));
+    await new Promise((r) => setTimeout(r, 100));
     process.exit(1);
   }
 
@@ -436,6 +446,11 @@ async function main() {
     p.log.warn(
       "Plan contains shell commands — review carefully before proceeding.",
     );
+  }
+
+  // Step 3.5: Display validation/guardrail warnings
+  if (planResult.warnings.length > 0) {
+    planResult.warnings.forEach((w) => p.log.warn(w));
   }
 
   // Step 4: Dry run — show plan and exit

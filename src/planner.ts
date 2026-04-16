@@ -1,22 +1,28 @@
 import {
   buildCatalogPrompt,
-  detectCatalogs,
   createStepSchema,
   createPlanSchema,
   validateStep,
-  buildCommandMap,
+  buildCatalogMap,
   getAllTypeEnums,
+  getCommandNames,
   type Plan,
+  type Step,
 } from "./catalogs/index.js";
 import type { AIProvider, TokenUsage } from "./providers/types.js";
+import { applyGuardrails } from "./guardrails.js";
 
 // ---------------------------------------------------------------------------
 // System prompt — constrains AI to only produce catalog-valid JSON
 // ---------------------------------------------------------------------------
-function buildSystemPrompt(cwd: string, forcedCatalogs?: string[]): string {
+function buildSystemPrompt(
+  cwd: string,
+  forcedCatalogs?: string[],
+  userPrompt?: string,
+): string {
   return `You are a CLI task planner. Given a user's goal, generate a JSON execution plan.
 
-${buildCatalogPrompt(cwd, forcedCatalogs)}
+${buildCatalogPrompt(cwd, forcedCatalogs, userPrompt)}
 
 Rules:
 - ONLY use command types and commands listed above
@@ -56,14 +62,46 @@ Respond ONLY with valid JSON matching this exact shape, no markdown, no explanat
 // ---------------------------------------------------------------------------
 // Main planner function
 // ---------------------------------------------------------------------------
+export interface PlanResult {
+  plan: Plan;
+  usage: TokenUsage;
+  warnings: string[];
+}
+
+function normalizeStepCommand(step: Step, catalogMap: ReturnType<typeof buildCatalogMap>): Step {
+  const raw = step.command.trim();
+  if (!raw.includes(" ")) return step;
+
+  const catalog = catalogMap.get(step.type);
+  if (!catalog) return step;
+
+  const commandNames = getCommandNames(catalog.commands);
+  if (commandNames[0] === "any") return step;
+
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return step;
+
+  const [topLevel, ...inlineArgs] = parts;
+  if (!commandNames.includes(topLevel)) return step;
+
+  const alreadyPrefixed = inlineArgs.every((token, i) => step.args[i] === token);
+  const args = alreadyPrefixed ? step.args : [...inlineArgs, ...step.args];
+
+  return {
+    ...step,
+    command: topLevel,
+    args,
+  };
+}
+
 export async function generatePlan(
   userPrompt: string,
   provider: AIProvider,
   debug: boolean = false,
   cwd: string = process.cwd(),
   forcedCatalogs?: string[],
-): Promise<{ plan: Plan; usage: TokenUsage }> {
-  const systemPrompt = buildSystemPrompt(cwd, forcedCatalogs);
+): Promise<PlanResult> {
+  const systemPrompt = buildSystemPrompt(cwd, forcedCatalogs, userPrompt);
 
   if (debug) {
     console.log("┌");
@@ -103,7 +141,7 @@ export async function generatePlan(
   }
 
   // Layer 2: Zod shape validation (dynamic schema based on detected catalogs)
-  const allTypes = getAllTypeEnums(cwd, forcedCatalogs);
+  const allTypes = getAllTypeEnums(cwd, forcedCatalogs, userPrompt);
   const StepSchema = createStepSchema(allTypes);
   const PlanSchema = createPlanSchema(StepSchema);
 
@@ -115,19 +153,38 @@ export async function generatePlan(
     throw new Error(`Plan failed schema validation:\n${issues}`);
   }
 
-  // Layer 3: Catalog whitelist validation
-  const commandMap = buildCommandMap(cwd, forcedCatalogs);
-  for (const step of result.data.steps) {
-    const check = validateStep(step, commandMap);
+  // Layer 3: Catalog whitelist + arg-level validation
+  const catalogMap = buildCatalogMap(cwd, forcedCatalogs, userPrompt);
+  const normalizedPlan: Plan = {
+    ...result.data,
+    steps: result.data.steps.map((step) => normalizeStepCommand(step, catalogMap)),
+  };
+
+  const allWarnings: string[] = [];
+  for (const step of normalizedPlan.steps) {
+    const check = validateStep(step, catalogMap);
     if (!check.valid) {
       throw new Error(
         `Step ${step.id} failed catalog validation: ${check.reason}`,
       );
     }
+    if (check.warnings) {
+      allWarnings.push(...check.warnings);
+    }
   }
 
+  // Layer 3.5: Generic safety guardrails
+  const guardrailResult = applyGuardrails(normalizedPlan.steps);
+  if (!guardrailResult.ok) {
+    throw new Error(
+      `Safety guardrail violations:\n${guardrailResult.errors.join("\n")}`,
+    );
+  }
+  allWarnings.push(...guardrailResult.warnings);
+
   return {
-    plan: result.data,
+    plan: normalizedPlan,
     usage: response.usage,
+    warnings: allWarnings,
   };
 }

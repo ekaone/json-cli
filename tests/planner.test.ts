@@ -93,4 +93,39 @@ describe("generatePlan", () => {
       generatePlan("anything", mockProvider(hallucinated)),
     ).rejects.toThrow("catalog validation");
   });
+
+  it("normalizes combined command token into command + args", async () => {
+    const resendCombined = JSON.stringify({
+      goal: "send an email",
+      steps: [
+        {
+          id: 1,
+          type: "resend",
+          command: "emails send",
+          args: [
+            "--from",
+            "no-reply@support.com",
+            "--to",
+            "ekaone@gmail.com",
+            "--subject",
+            "Hello, this is support team",
+            "--text",
+            "how are you",
+          ],
+          description: "Send email",
+        },
+      ],
+    });
+
+    const result = await generatePlan(
+      "send email",
+      mockProvider(resendCombined),
+      false,
+      process.cwd(),
+      ["resend"],
+    );
+
+    expect(result.plan.steps[0].command).toBe("emails");
+    expect(result.plan.steps[0].args[0]).toBe("send");
+  });
 });
